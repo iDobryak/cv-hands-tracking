@@ -1,6 +1,22 @@
 import math
+from dataclasses import dataclass
 
-from src.metrics.hand_metrics import HandMetricSmoother, hand_metrics_0_100
+import numpy as np
+
+from src.metrics.hand_metrics import (
+    HandMetricSmoother,
+    _angle_degrees,
+    _hand_tilts,
+    _remap_finger_score,
+    hand_metrics_0_100,
+)
+
+
+@dataclass
+class _Point:
+    x: float
+    y: float
+    z: float
 
 
 def _open_hand_landmarks():
@@ -49,8 +65,47 @@ def test_fist_has_more_curl_than_open_hand() -> None:
     assert sum(open_values[1:6]) > sum(fist_values[1:6])
 
 
+def test_hand_metrics_short_landmarks_return_zeroes() -> None:
+    assert hand_metrics_0_100([(0.0, 0.0, 0.0)] * 5) == [0.0] * 8
+
+
+def test_hand_metrics_accepts_object_landmarks() -> None:
+    obj_points = [_Point(x, y, z) for x, y, z in _open_hand_landmarks()]
+    metrics = hand_metrics_0_100(obj_points)
+    assert len(metrics) == 8
+    assert all(0.0 <= v <= 100.0 for v in metrics)
+
+
+def test_angle_degrees_handles_zero_length_vectors() -> None:
+    p = np.array([0.0, 0.0, 0.0], dtype=np.float32)
+    assert _angle_degrees(p, p, p) == 180.0
+
+
+def test_remap_finger_score_handles_lower_bound() -> None:
+    assert _remap_finger_score(10.0) == 0.0
+
+
+def test_hand_tilts_returns_zero_for_degenerate_plane() -> None:
+    points = np.zeros((21, 3), dtype=np.float32)
+    tilt_fb, tilt_side = _hand_tilts(points)
+    assert tilt_fb == 0.0
+    assert tilt_side == 0.0
+
+
 def test_smoother_decay_on_missing_detection() -> None:
     smoother = HandMetricSmoother(alpha=0.5, decay=0.9)
     first = smoother.update("left", [100.0, 50.0, 40.0, 30.0, 20.0, 10.0, 70.0, 60.0])
     missing = smoother.update("left", None)
     assert math.isclose(first[0] * 0.9, missing[0], rel_tol=1e-5)
+
+
+def test_smoother_missing_without_state_returns_zeroes() -> None:
+    smoother = HandMetricSmoother()
+    assert smoother.update("left", None) == [0.0] * 8
+
+
+def test_smoother_blends_updates_case_insensitively() -> None:
+    smoother = HandMetricSmoother(alpha=0.25)
+    smoother.update("Left", [100.0] * 8)
+    blended = smoother.update("left", [0.0] * 8)
+    assert all(math.isclose(v, 75.0, rel_tol=1e-5) for v in blended)
