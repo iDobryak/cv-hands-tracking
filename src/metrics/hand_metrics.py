@@ -12,6 +12,8 @@ RING = [13, 14, 15, 16]
 PINKY = [17, 18, 19, 20]
 FINGERS = [THUMB, INDEX, MIDDLE, RING, PINKY]
 HAND_METRIC_COUNT = 8
+FINGER_REMAP_MIN = 27.0
+FINGER_REMAP_MAX = 100.0
 
 
 def _to_xyz_array(landmarks: Iterable) -> np.ndarray:
@@ -45,6 +47,16 @@ def _finger_curl_score(points: np.ndarray, mcp: int, pip: int, dip: int, tip: in
     curl = ((180.0 - ang1) + (180.0 - ang2)) / 360.0 * 100.0
     # User scale: 0 = fully bent (fist), 100 = fully straight.
     return _clamp_0_100(100.0 - curl)
+
+
+def _remap_finger_score(value: float) -> float:
+    # Empirical calibration: values <=27 should be treated as fully bent (0%).
+    if value <= FINGER_REMAP_MIN:
+        return 0.0
+    if value >= FINGER_REMAP_MAX:
+        return 100.0
+    span = FINGER_REMAP_MAX - FINGER_REMAP_MIN
+    return _clamp_0_100((value - FINGER_REMAP_MIN) / span * 100.0)
 
 
 def _deg90_to_percent(value: float) -> float:
@@ -81,11 +93,11 @@ def hand_metrics_0_100(landmarks: Iterable) -> list[float]:
     normal = np.cross(index_mcp - wrist, pinky_mcp - wrist)
     rotation = _clamp_0_100((50.0 + np.tanh(float(normal[2]) * 8.0) * 50.0))
 
-    thumb = _finger_curl_score(points, 1, 2, 3, 4)
-    index = _finger_curl_score(points, 5, 6, 7, 8)
-    middle = _finger_curl_score(points, 9, 10, 11, 12)
-    ring = _finger_curl_score(points, 13, 14, 15, 16)
-    pinky = _finger_curl_score(points, 17, 18, 19, 20)
+    thumb = _remap_finger_score(_finger_curl_score(points, 1, 2, 3, 4))
+    index = _remap_finger_score(_finger_curl_score(points, 5, 6, 7, 8))
+    middle = _remap_finger_score(_finger_curl_score(points, 9, 10, 11, 12))
+    ring = _remap_finger_score(_finger_curl_score(points, 13, 14, 15, 16))
+    pinky = _remap_finger_score(_finger_curl_score(points, 17, 18, 19, 20))
     tilt_fb_deg, tilt_side_deg = _hand_tilts(points)
     tilt_fb = _deg90_to_percent(tilt_fb_deg)
     tilt_side = _deg90_to_percent(tilt_side_deg)

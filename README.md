@@ -1,88 +1,125 @@
-# Realtime Face + Hand Tracking (Python Desktop MVP)
+# Realtime Face + Hand Tracking
 
-Desktop-приложение на Python с realtime-трекингом лица и обеих рук через веб-камеру.
+## Русский
 
-Стек:
-- Python 3.11+
-- `uv` (менеджер зависимостей и запуск)
-- OpenCV (захват видео)
-- MediaPipe (face/hand landmarks + handedness)
-- PySide6 (GUI, через пакет `pyside6-essentials`)
-- pyqtgraph (realtime bar-графики)
+### Описание
+Десктоп-приложение на Python для трекинга лица и обеих рук в реальном времени через веб-камеру.
 
-## Что реализовано
-
-- Источник видео: дефолтная веб-камера (`camera_index=0`).
-- Выбор источника при запуске: диалог выбора доступной веб-камеры (`Webcam #N`).
-- Опция в интерфейсе: `Изображение отражено зеркально` для корректной интерпретации зеркальных камер
-  (правильная маркировка Left/Right и корректный знак yaw головы).
-- Расширяемая архитектура источников через интерфейс `VideoSource`.
-- Детекция:
-  - Лицо: ключевые точки нос/глаза/рот + простые флаги мимики (`smile`, `mouth_open`, `brow_raise`).
-  - Руки: до двух одновременно, с маркировкой `LEFT`/`RIGHT`.
-  - Отрисовка структуры кисти (landmarks + connections).
-- GUI:
-  - Верхняя часть: слева инфо-панель (статусы + head metrics), справа видеопоток с оверлеем.
-  - Нижняя часть: 2 независимых блока графиков (левая/правая рука).
-- На видеопотоке в правом верхнем углу:
-  - скорость обработки (`FPS`)
-  - список ключевых точек лица (`nose`, `left_eye`, `right_eye`, `mouth`).
-- Метрики для каждой руки (0..100):
-  - `Rot` (поворот ладонь/тыльная сторона)
-  - `Thumb`, `Index`, `Middle`, `Ring`, `Pinky` (сгиб пальцев)
-  - `F/B` (наклон вперед/назад, отображается как физический угол в `°`)
-  - `Side` (наклон вбок, отображается как физический угол в `°`)
-- Realtime обновление метрик со сглаживанием (EMA) и деградацией к нулю при потере детекции.
+### Основной функционал
+- Детекция лица и двух рук в реальном времени.
+- Отображение видеопотока с оверлеями ключевых точек.
+- Метрики рук (левая и правая отдельно):
+  - `Rot`, `Thumb`, `Index`, `Middle`, `Ring`, `Pinky`, `F/B`, `Side`.
 - Метрики головы:
-  - `Yaw` (поворот, -180..180 градусов)
-  - `Tilt` (наклон, -180..180 градусов; 0 = вертикально, вправо = `+`, влево = `-`, вверх ногами = `180`)
-  - `Eye`, `Smile`, `Mouth` (проценты 0..100)
-- На всех столбчатых графиках отображаются численные значения (физические единицы: `°` или `%`).
-- Потоковая модель без блокировки UI:
-  - поток чтения камеры + очередь кадров
-  - отдельный QThread для инференса и передачи готовых кадров в UI.
+  - `Yaw`, `Tilt`, `Eye`, `Smile`, `Mouth`.
+- Метрика направления взгляда (`Gaze`).
+- Проценты открытия глаз:
+  - `Eyes open: L:XX% R:YY%`.
+- Инверсия камеры (зеркальный режим):
+  - корректно влияет на отображение,
+  - корректно влияет на left/right подписи для рук и глаз.
+- Выбор источника камеры:
+  - если доступен ровно один источник, выбирается автоматически,
+  - в главном окне есть кнопка `Сменить источник` для повторного выбора.
+- Гибкая настройка интерфейса:
+  - можно менять размеры окна,
+  - можно менять размеры внутренних зон через splitter (панель, видео, блоки рук).
+- Сохранение настроек интерфейса между запусками:
+  - размеры окна,
+  - размеры splitter-блоков,
+  - состояние инверсии камеры.
+- Устойчивое отображение графиков при потере данных:
+  - при отсутствии новых данных столбики сохраняют последнее значение,
+  - невалидные столбики окрашиваются в серый,
+  - если рука пропала — весь график руки становится серым.
 
-## Структура проекта
+### Технологии
+- Python 3.11+
+- [uv](https://docs.astral.sh/uv/)
+- OpenCV
+- MediaPipe Tasks
+- PySide6 (`pyside6-essentials`)
+- pyqtgraph
 
-```text
-main.py
-src/
-  capture/
-    base.py
-    camera.py
-  vision/
-    mediapipe_engine.py
-  metrics/
-    hand_metrics.py
-  ui/
-    runtime.py
-    main_window.py
-tests/
-  test_hand_metrics.py
-```
 
-## Установка и запуск (UV workflow)
-
-1. Установить зависимости:
-
+### Запуск
+1. Установка зависимостей:
 ```bash
 uv sync
 ```
 
-2. Запустить приложение:
-
+2. Запуск приложения:
 ```bash
 uv run python main.py
 ```
 
-3. Запустить тесты:
-
+3. Запуск тестов:
 ```bash
 uv run pytest
 ```
 
-## Примечания по производительности
+### Лицензия
+Проект распространяется под лицензией Apache 2.0. См. файл `LICENSE`.
 
-- Целевой FPS зависит от камеры/CPU/GPU и разрешения.
-- По умолчанию поток камеры и инференс разделены, чтобы UI оставался отзывчивым.
-- При необходимости можно снизить разрешение в `CameraSource` (`src/capture/camera.py`) для роста FPS.
+---
+
+## English
+
+### Overview
+A Python desktop application for real-time face and two-hand tracking using a webcam.
+
+### Key Features
+- Real-time face and two-hand detection.
+- Live video stream with keypoint overlays.
+- Hand metrics (separate for left and right):
+  - `Rot`, `Thumb`, `Index`, `Middle`, `Ring`, `Pinky`, `F/B`, `Side`.
+- Head metrics:
+  - `Yaw`, `Tilt`, `Eye`, `Smile`, `Mouth`.
+- Gaze direction metric (`Gaze`).
+- Eye openness percentages:
+  - `Eyes open: L:XX% R:YY%`.
+- Camera inversion (mirror mode):
+  - correctly affects rendering,
+  - correctly updates left/right labels for hands and eyes.
+- Camera source selection:
+  - auto-selects when only one source is available,
+  - includes a `Change source` button in the main window.
+- Flexible layout resizing:
+  - resizable main window,
+  - resizable internal areas via splitters (panel, video, hand blocks).
+- Persistent UI settings between runs:
+  - window size,
+  - splitter sizes,
+  - camera inversion state.
+- Robust chart behavior when data is missing:
+  - bars keep the last valid value,
+  - invalid bars are rendered in gray,
+  - if a hand is lost, the whole hand chart turns gray.
+
+### Tech Stack
+- Python 3.11+
+- [uv](https://docs.astral.sh/uv/)
+- OpenCV
+- MediaPipe Tasks
+- PySide6 (`pyside6-essentials`)
+- pyqtgraph
+
+
+### Run
+1. Install dependencies:
+```bash
+uv sync
+```
+
+2. Start app:
+```bash
+uv run python main.py
+```
+
+3. Run tests:
+```bash
+uv run pytest
+```
+
+### License
+This project is licensed under Apache 2.0. See `LICENSE`.
