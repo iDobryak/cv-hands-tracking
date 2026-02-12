@@ -46,7 +46,7 @@ def test_hand_metrics_are_bounded() -> None:
 def test_fist_has_more_curl_than_open_hand() -> None:
     open_values = hand_metrics_0_100(_open_hand_landmarks())
     fist_values = hand_metrics_0_100(_fist_landmarks())
-    assert sum(fist_values[1:6]) > sum(open_values[1:6])
+    assert sum(open_values[1:6]) > sum(fist_values[1:6])
 
 
 def test_smoother_decay_on_missing_detection() -> None:

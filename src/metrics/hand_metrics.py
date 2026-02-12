@@ -43,7 +43,8 @@ def _finger_curl_score(points: np.ndarray, mcp: int, pip: int, dip: int, tip: in
     ang1 = _angle_degrees(points[mcp], points[pip], points[dip])
     ang2 = _angle_degrees(points[pip], points[dip], points[tip])
     curl = ((180.0 - ang1) + (180.0 - ang2)) / 360.0 * 100.0
-    return _clamp_0_100(curl)
+    # User scale: 0 = fully bent (fist), 100 = fully straight.
+    return _clamp_0_100(100.0 - curl)
 
 
 def _deg90_to_percent(value: float) -> float:

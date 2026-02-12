@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import signal
 import sys
 
 import pyqtgraph as pg
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QTimer, Qt
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QApplication,
@@ -46,7 +47,8 @@ class MetricsBarWidget(QFrame):
 
         self.graph = pg.PlotWidget()
         self.graph.setBackground("#111")
-        self.graph.setYRange(y_min, y_max)
+        y_pad = (y_max - y_min) * 0.20
+        self.graph.setYRange(y_min - y_pad * 0.45, y_max + y_pad)
         self.graph.setMouseEnabled(x=False, y=False)
         self.graph.showGrid(x=True, y=True, alpha=0.20)
         self.graph.getAxis("left").setTextPen("#cccccc")
@@ -187,6 +189,22 @@ def run_app() -> None:
     app = QApplication(sys.argv)
     pg.setConfigOptions(antialias=True)
     source_dialog = SourceSelectDialog()
+
+    def _handle_terminate(signum, _frame) -> None:  # type: ignore[no-untyped-def]
+        if signum not in (signal.SIGINT, signal.SIGTERM):
+            return
+        if source_dialog.isVisible():
+            source_dialog.reject()
+        app.closeAllWindows()
+        app.quit()
+
+    signal.signal(signal.SIGINT, _handle_terminate)
+    signal.signal(signal.SIGTERM, _handle_terminate)
+
+    signal_pump = QTimer()
+    signal_pump.timeout.connect(lambda: None)
+    signal_pump.start(150)
+
     if source_dialog.exec() != source_dialog.DialogCode.Accepted:
         return
     win = MainWindow(camera_index=source_dialog.camera_index)
