@@ -13,6 +13,7 @@ htmlcov/
 
 # Virtual environments
 .venv
+.cache/
 
 # IDE and OS
 .idea/

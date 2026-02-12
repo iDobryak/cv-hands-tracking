@@ -18,6 +18,21 @@ def _norm_dist(a: Any, b: Any, n1: Any, n2: Any) -> float:
     return _dist(a, b) / (_dist(n1, n2) + 1e-6)
 
 
+def _gaze_axis_from_eye(iris_center: float, low: float, high: float) -> float:
+    span = high - low
+    if span < 1e-6:
+        return 0.0
+    t = (iris_center - low) / span
+    t = _clip(t, 0.0, 1.0)
+    return _clip((t - 0.5) * 2.0, -1.0, 1.0)
+
+
+def _mean_xy(lms: Any, indices: list[int]) -> tuple[float, float]:
+    xs = [lms[i].x for i in indices]
+    ys = [lms[i].y for i in indices]
+    return float(np.mean(xs)), float(np.mean(ys))
+
+
 def head_metrics(face_landmarks: Any) -> dict[str, float]:
     """Return head metrics: yaw/pitch in degrees and expression percentages."""
     lms = face_landmarks.landmark
@@ -55,12 +70,47 @@ def head_metrics(face_landmarks: Any) -> dict[str, float]:
     smile_score = _clip((_dist(mouth_left, mouth_right) / (eye_base * 0.95) - 0.2) / 0.8 * 100.0, 0.0, 100.0)
     mouth_open_pct = _clip(_norm_dist(mouth_up, mouth_down, left_eye, right_eye) / 0.35 * 100.0, 0.0, 100.0)
 
+    # Eye gaze approximation from iris center within each eye box.
+    # Returns normalized direction in range [-1..1], where:
+    # gaze_x < 0 => left, gaze_x > 0 => right
+    # gaze_y < 0 => up,   gaze_y > 0 => down
+    gaze_x = 0.0
+    gaze_y = 0.0
+    if len(lms) > 477:
+        right_iris_x, right_iris_y = _mean_xy(lms, [468, 469, 470, 471, 472])
+        left_iris_x, left_iris_y = _mean_xy(lms, [473, 474, 475, 476, 477])
+
+        right_x = _gaze_axis_from_eye(
+            right_iris_x,
+            min(lms[33].x, lms[133].x),
+            max(lms[33].x, lms[133].x),
+        )
+        left_x = _gaze_axis_from_eye(
+            left_iris_x,
+            min(lms[362].x, lms[263].x),
+            max(lms[362].x, lms[263].x),
+        )
+        right_y = _gaze_axis_from_eye(
+            right_iris_y,
+            min(lms[159].y, lms[145].y),
+            max(lms[159].y, lms[145].y),
+        )
+        left_y = _gaze_axis_from_eye(
+            left_iris_y,
+            min(lms[386].y, lms[374].y),
+            max(lms[386].y, lms[374].y),
+        )
+        gaze_x = _clip((left_x + right_x) * 0.5, -1.0, 1.0)
+        gaze_y = _clip((left_y + right_y) * 0.5, -1.0, 1.0)
+
     return {
         "yaw_deg": yaw_deg,
         "pitch_deg": pitch_deg,
         "eye_open_pct": eye_open_pct,
         "smile_pct": smile_score,
         "mouth_open_pct": mouth_open_pct,
+        "gaze_x": gaze_x,
+        "gaze_y": gaze_y,
     }
 
 
