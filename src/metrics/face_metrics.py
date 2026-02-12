@@ -36,11 +36,17 @@ def head_metrics(face_landmarks: Any) -> dict[str, float]:
     eye_base = _dist(left_eye, right_eye) + 1e-6
 
     eye_mid_x = (left_eye.x + right_eye.x) * 0.5
-    eye_mid_y = (left_eye.y + right_eye.y) * 0.5
     yaw_norm = (nose.x - eye_mid_x) / (eye_base * 0.5 + 1e-6)
-    pitch_norm = (nose.y - eye_mid_y) / (eye_base * 0.6 + 1e-6)
     yaw_deg = _clip(yaw_norm * 90.0, -180.0, 180.0)
-    pitch_deg = _clip(pitch_norm * 110.0, -180.0, 180.0)
+
+    # Roll/tilt angle convention:
+    # upright -> 0, right tilt -> positive, left tilt -> negative, upside-down -> +180.
+    dx = right_eye.x - left_eye.x
+    dy = right_eye.y - left_eye.y
+    tilt_deg = float(np.degrees(np.arctan2(dy, dx)))
+    if abs(tilt_deg + 180.0) < 1e-4:
+        tilt_deg = 180.0
+    pitch_deg = _clip(tilt_deg, -180.0, 180.0)
 
     left_eye_open = _clip(_dist(left_eye_up, left_eye_down) / (eye_base * 0.18) * 100.0, 0.0, 100.0)
     right_eye_open = _clip(_dist(right_eye_up, right_eye_down) / (eye_base * 0.18) * 100.0, 0.0, 100.0)
@@ -81,4 +87,3 @@ class FaceMetricSmoother:
         self._state[1] = np.clip(self._state[1], -180.0, 180.0)
         self._state[2:] = np.clip(self._state[2:], 0.0, 100.0)
         return self._state.tolist()
-

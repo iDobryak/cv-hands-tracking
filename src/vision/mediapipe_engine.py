@@ -58,7 +58,7 @@ class MediaPipeVisionEngine:
         image_rgb.flags.writeable = True
 
         metrics: dict[str, list[float] | None] = {"left": None, "right": None}
-        face_data = self._draw_face(frame_bgr, face_result)
+        face_data = self._draw_face(frame_bgr, face_result, source_mirrored=source_mirrored)
         self._draw_hands(frame_bgr, hand_result, metrics, source_mirrored=source_mirrored)
 
         left_values = self._smoother.update("left", metrics["left"])
@@ -131,7 +131,7 @@ class MediaPipeVisionEngine:
             return "left"
         return label
 
-    def _draw_face(self, frame_bgr: np.ndarray, face_result: Any) -> dict[str, Any]:
+    def _draw_face(self, frame_bgr: np.ndarray, face_result: Any, source_mirrored: bool) -> dict[str, Any]:
         if not face_result.multi_face_landmarks:
             return {"face_detected": False, "head_values": None}
 
@@ -139,12 +139,20 @@ class MediaPipeVisionEngine:
         face = face_result.multi_face_landmarks[0]
         lms = face.landmark
 
-        key_ids = {
-            "nose": 1,
-            "left_eye": 33,
-            "right_eye": 263,
-            "mouth": 13,
-        }
+        if source_mirrored:
+            key_ids = {
+                "nose": 1,
+                "left_eye": 263,
+                "right_eye": 33,
+                "mouth": 13,
+            }
+        else:
+            key_ids = {
+                "nose": 1,
+                "left_eye": 33,
+                "right_eye": 263,
+                "mouth": 13,
+            }
         for name, idx in key_ids.items():
             p = lms[idx]
             x, y = int(p.x * w), int(p.y * h)

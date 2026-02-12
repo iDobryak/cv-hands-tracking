@@ -31,10 +31,12 @@ class MetricsBarWidget(QFrame):
         y_max: float,
         brush: str = "#3aa6ff",
         value_formatter=None,
+        widget_height: int = 280,
     ) -> None:
         super().__init__()
         self.setFrameShape(QFrame.Shape.StyledPanel)
         self.setStyleSheet("QFrame { background: #111; border: 1px solid #333; border-radius: 8px; }")
+        self.setFixedHeight(widget_height)
         self._labels = labels
         self._value_formatter = value_formatter or (lambda idx, value: f"{value:.1f}")
         self._y_min = y_min
@@ -117,13 +119,15 @@ class MainWindow(QMainWindow):
 
         self.head_widget = MetricsBarWidget(
             title="Head Metrics",
-            labels=["Yaw", "Pitch", "Eye", "Smile", "Mouth"],
+            labels=["Yaw", "Tilt", "Eye", "Smile", "Mouth"],
             y_min=-180.0,
             y_max=180.0,
             brush="#f28f3b",
             value_formatter=format_head_value,
+            widget_height=300,
         )
-        left_layout.addWidget(self.head_widget, stretch=1)
+        left_layout.addStretch(1)
+        left_layout.addWidget(self.head_widget, stretch=0, alignment=Qt.AlignmentFlag.AlignBottom)
         top_row.addWidget(left_panel, stretch=0)
 
         self.video_label = QLabel("Camera stream")
@@ -141,6 +145,7 @@ class MainWindow(QMainWindow):
             y_max=100.0,
             brush="#3aa6ff",
             value_formatter=format_hand_value,
+            widget_height=300,
         )
         self.right_widget = MetricsBarWidget(
             title="Right Hand Metrics",
@@ -149,6 +154,7 @@ class MainWindow(QMainWindow):
             y_max=100.0,
             brush="#66d17a",
             value_formatter=format_hand_value,
+            widget_height=300,
         )
         bars_row.addWidget(self.left_widget)
         bars_row.addWidget(self.right_widget)
