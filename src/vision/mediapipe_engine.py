@@ -7,6 +7,7 @@ import cv2
 import mediapipe as mp
 import numpy as np
 
+from src.metrics.face_metrics import FaceMetricSmoother, head_metrics
 from src.metrics.hand_metrics import HandMetricSmoother, hand_metrics_0_100
 
 
@@ -14,6 +15,8 @@ from src.metrics.hand_metrics import HandMetricSmoother, hand_metrics_0_100
 class ProcessedFrame:
     frame_bgr: np.ndarray
     metrics: dict[str, list[float]]
+    head_metrics: list[float]
+    diagnostics: dict[str, str]
 
 
 class MediaPipeVisionEngine:
@@ -40,6 +43,7 @@ class MediaPipeVisionEngine:
             min_tracking_confidence=0.5,
         )
         self._smoother = HandMetricSmoother(alpha=0.35, decay=0.90)
+        self._face_smoother = FaceMetricSmoother(alpha=0.30, decay=0.90)
 
     def close(self) -> None:
         self._hands.close()
@@ -54,23 +58,26 @@ class MediaPipeVisionEngine:
         image_rgb.flags.writeable = True
 
         metrics: dict[str, list[float] | None] = {"left": None, "right": None}
-        self._draw_face(frame_bgr, face_result)
+        face_data = self._draw_face(frame_bgr, face_result)
         self._draw_hands(frame_bgr, hand_result, metrics)
 
         left_values = self._smoother.update("left", metrics["left"])
         right_values = self._smoother.update("right", metrics["right"])
-        cv2.putText(
-            frame_bgr,
-            "Face: nose/eyes/mouth + expression | Hands: Left/Right landmarks",
-            (16, 28),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.6,
-            (210, 210, 210),
-            2,
-            cv2.LINE_AA,
-        )
+        head_values = self._face_smoother.update(face_data["head_values"])
 
-        return ProcessedFrame(frame_bgr=frame_bgr, metrics={"left": left_values, "right": right_values})
+        diagnostics = {
+            "face": "detected" if face_data["face_detected"] else "lost",
+            "left_hand": "detected" if metrics["left"] is not None else "lost",
+            "right_hand": "detected" if metrics["right"] is not None else "lost",
+            "keypoints": "nose, left_eye, right_eye, mouth",
+        }
+
+        return ProcessedFrame(
+            frame_bgr=frame_bgr,
+            metrics={"left": left_values, "right": right_values},
+            head_metrics=head_values,
+            diagnostics=diagnostics,
+        )
 
     def _draw_hands(self, frame_bgr: np.ndarray, hand_result: Any, metrics: dict[str, list[float] | None]) -> None:
         if not hand_result.multi_hand_landmarks or not hand_result.multi_handedness:
@@ -104,9 +111,9 @@ class MediaPipeVisionEngine:
             )
             metrics[label] = hand_metrics_0_100(hand_landmarks.landmark)
 
-    def _draw_face(self, frame_bgr: np.ndarray, face_result: Any) -> None:
+    def _draw_face(self, frame_bgr: np.ndarray, face_result: Any) -> dict[str, Any]:
         if not face_result.multi_face_landmarks:
-            return
+            return {"face_detected": False, "head_values": None}
 
         h, w = frame_bgr.shape[:2]
         face = face_result.multi_face_landmarks[0]
@@ -124,18 +131,12 @@ class MediaPipeVisionEngine:
             cv2.circle(frame_bgr, (x, y), 4, (0, 255, 0), -1)
             cv2.putText(frame_bgr, name, (x + 6, y - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 255, 0), 1)
 
-        mouth_open = self._norm_dist(lms[13], lms[14], lms[33], lms[263]) > 0.18
-        smile = self._norm_dist(lms[61], lms[291], lms[33], lms[263]) > 0.50
-        brow = (
-            self._norm_dist(lms[105], lms[159], lms[33], lms[263]) > 0.15
-            and self._norm_dist(lms[334], lms[386], lms[33], lms[263]) > 0.15
-        )
-        exp_text = f"smile:{int(smile)} mouth_open:{int(mouth_open)} brow_raise:{int(brow)}"
-        cv2.putText(frame_bgr, exp_text, (16, 56), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (20, 220, 20), 2, cv2.LINE_AA)
-
-    @staticmethod
-    def _norm_dist(a: Any, b: Any, n1: Any, n2: Any) -> float:
-        d_ab = np.hypot(a.x - b.x, a.y - b.y)
-        d_n = np.hypot(n1.x - n2.x, n1.y - n2.y) + 1e-6
-        return float(d_ab / d_n)
-
+        face = head_metrics(face)
+        head_values = [
+            face["yaw_deg"],
+            face["pitch_deg"],
+            face["eye_open_pct"],
+            face["smile_pct"],
+            face["mouth_open_pct"],
+        ]
+        return {"face_detected": True, "head_values": head_values}
