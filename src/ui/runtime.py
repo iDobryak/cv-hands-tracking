@@ -18,10 +18,14 @@ class VisionRuntime(QThread):
         super().__init__()
         self._running = True
         self._camera_index = camera_index
+        self._source_mirrored = False
 
     def stop(self) -> None:
         self._running = False
         self.wait(1500)
+
+    def set_source_mirrored(self, enabled: bool) -> None:
+        self._source_mirrored = enabled
 
     def run(self) -> None:
         camera = CameraSource(camera_index=self._camera_index)
@@ -34,7 +38,7 @@ class VisionRuntime(QThread):
                 if frame is None:
                     continue
 
-                processed = engine.process(frame)
+                processed = engine.process(frame, source_mirrored=self._source_mirrored)
 
                 now = time.perf_counter()
                 frame_times.append(now)

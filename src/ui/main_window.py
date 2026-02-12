@@ -7,6 +7,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QApplication,
+    QCheckBox,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -99,6 +100,10 @@ class MainWindow(QMainWindow):
         self.source_label = QLabel(f"Источник: Webcam #{camera_index}")
         self.source_label.setStyleSheet("QLabel { color: #dedede; font-size: 14px; font-weight: 600; }")
         left_layout.addWidget(self.source_label)
+        self.mirror_checkbox = QCheckBox("Изображение отражено зеркально")
+        self.mirror_checkbox.setChecked(False)
+        self.mirror_checkbox.setStyleSheet("QCheckBox { color: #d2d2d2; font-size: 13px; }")
+        left_layout.addWidget(self.mirror_checkbox)
 
         self.face_status = QLabel("Face: -")
         self.left_status = QLabel("Left hand: -")
@@ -129,19 +134,19 @@ class MainWindow(QMainWindow):
         bars_row = QHBoxLayout()
         self.left_widget = MetricsBarWidget(
             title="Left Hand Metrics",
-            labels=["Rot", "Thumb", "Index", "Middle", "Ring", "Pinky"],
+            labels=["Rot", "Thumb", "Index", "Middle", "Ring", "Pinky", "F/B", "Side"],
             y_min=0.0,
             y_max=100.0,
             brush="#3aa6ff",
-            value_formatter=lambda idx, v: f"{v:.0f}%",
+            value_formatter=format_hand_value,
         )
         self.right_widget = MetricsBarWidget(
             title="Right Hand Metrics",
-            labels=["Rot", "Thumb", "Index", "Middle", "Ring", "Pinky"],
+            labels=["Rot", "Thumb", "Index", "Middle", "Ring", "Pinky", "F/B", "Side"],
             y_min=0.0,
             y_max=100.0,
             brush="#66d17a",
-            value_formatter=lambda idx, v: f"{v:.0f}%",
+            value_formatter=format_hand_value,
         )
         bars_row.addWidget(self.left_widget)
         bars_row.addWidget(self.right_widget)
@@ -150,6 +155,7 @@ class MainWindow(QMainWindow):
         self.runtime = VisionRuntime(camera_index=camera_index)
         self.runtime.frame_ready.connect(self._on_frame_ready)
         self.runtime.error.connect(self._on_error)
+        self.mirror_checkbox.toggled.connect(self.runtime.set_source_mirrored)
         self.runtime.start()
 
     def _on_error(self, error: str) -> None:
@@ -169,8 +175,8 @@ class MainWindow(QMainWindow):
         self.left_status.setText(f"Left hand: {diagnostics.get('left_hand', '-')}")
         self.right_status.setText(f"Right hand: {diagnostics.get('right_hand', '-')}")
         self.head_widget.update_metrics(head_metrics)
-        self.left_widget.update_metrics(metrics.get("left", [0.0] * 6))
-        self.right_widget.update_metrics(metrics.get("right", [0.0] * 6))
+        self.left_widget.update_metrics(metrics.get("left", [0.0] * 8))
+        self.right_widget.update_metrics(metrics.get("right", [0.0] * 8))
 
     def closeEvent(self, event) -> None:  # type: ignore[override]
         self.runtime.stop()
@@ -196,3 +202,13 @@ def format_head_value(index: int, value: float) -> str:
     if index in (0, 1):
         return f"{value:.0f}°"
     return f"{_head_percent(value):.0f}%"
+
+
+def _percent_to_deg90(value: float) -> float:
+    return (value / 100.0) * 180.0 - 90.0
+
+
+def format_hand_value(index: int, value: float) -> str:
+    if index in (6, 7):
+        return f"{_percent_to_deg90(value):+.0f}°"
+    return f"{value:.0f}%"

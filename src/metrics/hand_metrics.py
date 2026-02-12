@@ -11,6 +11,7 @@ MIDDLE = [9, 10, 11, 12]
 RING = [13, 14, 15, 16]
 PINKY = [17, 18, 19, 20]
 FINGERS = [THUMB, INDEX, MIDDLE, RING, PINKY]
+HAND_METRIC_COUNT = 8
 
 
 def _to_xyz_array(landmarks: Iterable) -> np.ndarray:
@@ -45,11 +46,33 @@ def _finger_curl_score(points: np.ndarray, mcp: int, pip: int, dip: int, tip: in
     return _clamp_0_100(curl)
 
 
+def _deg90_to_percent(value: float) -> float:
+    return _clamp_0_100((value + 90.0) / 180.0 * 100.0)
+
+
+def _hand_tilts(points: np.ndarray) -> tuple[float, float]:
+    wrist = points[0]
+    index_mcp = points[5]
+    pinky_mcp = points[17]
+    normal = np.cross(index_mcp - wrist, pinky_mcp - wrist)
+    norm = float(np.linalg.norm(normal))
+    if norm < 1e-6:
+        return 0.0, 0.0
+    n = normal / norm
+
+    # Forward/back tilt and side tilt in degrees, clamped to practical range.
+    forward_back_deg = float(np.degrees(np.arctan2(float(n[1]), abs(float(n[2])) + 1e-6)))
+    side_deg = float(np.degrees(np.arctan2(float(n[0]), abs(float(n[2])) + 1e-6)))
+    forward_back_deg = float(np.clip(forward_back_deg, -90.0, 90.0))
+    side_deg = float(np.clip(side_deg, -90.0, 90.0))
+    return forward_back_deg, side_deg
+
+
 def hand_metrics_0_100(landmarks: Iterable) -> list[float]:
-    """Return [rotation, thumb, index, middle, ring, pinky] in range 0..100."""
+    """Return [rotation, thumb, index, middle, ring, pinky, tilt_fb, tilt_side] in range 0..100."""
     points = _to_xyz_array(landmarks)
     if len(points) < 21:
-        return [0.0] * 6
+        return [0.0] * HAND_METRIC_COUNT
 
     wrist = points[0]
     index_mcp = points[5]
@@ -62,8 +85,11 @@ def hand_metrics_0_100(landmarks: Iterable) -> list[float]:
     middle = _finger_curl_score(points, 9, 10, 11, 12)
     ring = _finger_curl_score(points, 13, 14, 15, 16)
     pinky = _finger_curl_score(points, 17, 18, 19, 20)
+    tilt_fb_deg, tilt_side_deg = _hand_tilts(points)
+    tilt_fb = _deg90_to_percent(tilt_fb_deg)
+    tilt_side = _deg90_to_percent(tilt_side_deg)
 
-    return [rotation, thumb, index, middle, ring, pinky]
+    return [rotation, thumb, index, middle, ring, pinky, tilt_fb, tilt_side]
 
 
 @dataclass
@@ -77,7 +103,7 @@ class HandMetricSmoother:
         if values is None:
             prev = self._state.get(key)
             if prev is None:
-                return [0.0] * 6
+                return [0.0] * HAND_METRIC_COUNT
             decayed = prev * self.decay
             self._state[key] = decayed
             return decayed.tolist()
@@ -91,4 +117,3 @@ class HandMetricSmoother:
         smoothed = np.clip(smoothed, 0.0, 100.0)
         self._state[key] = smoothed
         return smoothed.tolist()
-

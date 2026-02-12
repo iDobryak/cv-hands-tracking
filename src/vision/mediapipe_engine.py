@@ -49,7 +49,7 @@ class MediaPipeVisionEngine:
         self._hands.close()
         self._face.close()
 
-    def process(self, frame_bgr: np.ndarray) -> ProcessedFrame:
+    def process(self, frame_bgr: np.ndarray, source_mirrored: bool = False) -> ProcessedFrame:
         frame_bgr = frame_bgr.copy()
         image_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
         image_rgb.flags.writeable = False
@@ -59,10 +59,13 @@ class MediaPipeVisionEngine:
 
         metrics: dict[str, list[float] | None] = {"left": None, "right": None}
         face_data = self._draw_face(frame_bgr, face_result)
-        self._draw_hands(frame_bgr, hand_result, metrics)
+        self._draw_hands(frame_bgr, hand_result, metrics, source_mirrored=source_mirrored)
 
         left_values = self._smoother.update("left", metrics["left"])
         right_values = self._smoother.update("right", metrics["right"])
+        if source_mirrored and face_data["head_values"] is not None:
+            # Mirror changes horizontal orientation, so yaw sign must be inverted.
+            face_data["head_values"][0] = -face_data["head_values"][0]
         head_values = self._face_smoother.update(face_data["head_values"])
 
         diagnostics = {
@@ -79,13 +82,20 @@ class MediaPipeVisionEngine:
             diagnostics=diagnostics,
         )
 
-    def _draw_hands(self, frame_bgr: np.ndarray, hand_result: Any, metrics: dict[str, list[float] | None]) -> None:
+    def _draw_hands(
+        self,
+        frame_bgr: np.ndarray,
+        hand_result: Any,
+        metrics: dict[str, list[float] | None],
+        source_mirrored: bool,
+    ) -> None:
         if not hand_result.multi_hand_landmarks or not hand_result.multi_handedness:
             return
 
         h, w = frame_bgr.shape[:2]
         for hand_landmarks, handedness in zip(hand_result.multi_hand_landmarks, hand_result.multi_handedness):
-            label = handedness.classification[0].label.lower()
+            raw_label = handedness.classification[0].label.lower()
+            label = self._normalize_handedness(raw_label, source_mirrored)
             if label not in ("left", "right"):
                 continue
 
@@ -110,6 +120,16 @@ class MediaPipeVisionEngine:
                 cv2.LINE_AA,
             )
             metrics[label] = hand_metrics_0_100(hand_landmarks.landmark)
+
+    @staticmethod
+    def _normalize_handedness(label: str, source_mirrored: bool) -> str:
+        if not source_mirrored:
+            return label
+        if label == "left":
+            return "right"
+        if label == "right":
+            return "left"
+        return label
 
     def _draw_face(self, frame_bgr: np.ndarray, face_result: Any) -> dict[str, Any]:
         if not face_result.multi_face_landmarks:
