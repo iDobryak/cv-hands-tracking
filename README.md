@@ -1,5 +1,7 @@
 # Realtime Face + Hand Tracking
 
+![Application screenshot (face blurred)](face_blur_github.png)
+
 ## Русский
 
 ### Описание
