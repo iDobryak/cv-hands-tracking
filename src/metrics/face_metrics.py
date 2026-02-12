@@ -106,6 +106,8 @@ def head_metrics(face_landmarks: Any) -> dict[str, float]:
     return {
         "yaw_deg": yaw_deg,
         "pitch_deg": pitch_deg,
+        "left_eye_open_pct": left_eye_open,
+        "right_eye_open_pct": right_eye_open,
         "eye_open_pct": eye_open_pct,
         "smile_pct": smile_score,
         "mouth_open_pct": mouth_open_pct,

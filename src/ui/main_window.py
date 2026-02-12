@@ -155,11 +155,12 @@ class MainWindow(QMainWindow):
         left_layout.addWidget(self.invert_checkbox)
 
         self.face_status = QLabel("Face: -")
+        self.eyes_open_status = QLabel("Eyes open: -")
         self.gaze_status = QLabel("Gaze: -")
         self.left_status = QLabel("Left hand: -")
         self.right_status = QLabel("Right hand: -")
         self.fps_label = QLabel("FPS: 0.0")
-        for lbl in (self.face_status, self.gaze_status, self.left_status, self.right_status, self.fps_label):
+        for lbl in (self.face_status, self.eyes_open_status, self.gaze_status, self.left_status, self.right_status, self.fps_label):
             lbl.setStyleSheet("QLabel { color: #bdbdbd; font-size: 13px; }")
             left_layout.addWidget(lbl)
 
@@ -231,6 +232,7 @@ class MainWindow(QMainWindow):
         self.video_label.set_frame(image)
         self.fps_label.setText(f"FPS: {fps:.1f}")
         self.face_status.setText(f"Face: {diagnostics.get('face', '-')}")
+        self.eyes_open_status.setText(f"Eyes open: {diagnostics.get('eyes_open', '-')}")
         self.gaze_status.setText(f"Gaze: {diagnostics.get('gaze', '-')}")
         self.left_status.setText(f"Left hand: {diagnostics.get('left_hand', '-')}")
         self.right_status.setText(f"Right hand: {diagnostics.get('right_hand', '-')}")

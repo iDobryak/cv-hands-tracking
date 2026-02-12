@@ -85,9 +85,6 @@ class MediaPipeVisionEngine:
 
         left_values = self._smoother.update("left", metrics["left"])
         right_values = self._smoother.update("right", metrics["right"])
-        if source_mirrored and face_data["head_values"] is not None:
-            # Mirror changes horizontal orientation, so yaw sign must be inverted.
-            face_data["head_values"][0] = -face_data["head_values"][0]
         head_values = self._face_smoother.update(face_data["head_values"])
 
         diagnostics = {
@@ -96,6 +93,7 @@ class MediaPipeVisionEngine:
             "right_hand": "detected" if metrics["right"] is not None else "lost",
             "keypoints": "nose, left_eye, right_eye, mouth",
             "gaze": face_data.get("gaze_label", "-"),
+            "eyes_open": face_data.get("eyes_open_label", "-"),
         }
 
         return ProcessedFrame(
@@ -204,12 +202,12 @@ class MediaPipeVisionEngine:
 
     def _draw_face(self, frame_bgr: np.ndarray, face_result: Any, source_mirrored: bool) -> dict[str, Any]:
         if not face_result.face_landmarks:
-            return {"face_detected": False, "head_values": None, "gaze_label": "-"}
+            return {"face_detected": False, "head_values": None, "gaze_label": "-", "eyes_open_label": "-"}
 
         h, w = frame_bgr.shape[:2]
         lms = face_result.face_landmarks[0]
         if len(lms) <= 386:
-            return {"face_detected": False, "head_values": None, "gaze_label": "-"}
+            return {"face_detected": False, "head_values": None, "gaze_label": "-", "eyes_open_label": "-"}
 
         for conn in FaceLandmarksConnections.FACE_LANDMARKS_CONTOURS:
             p1 = lms[conn.start]
@@ -221,15 +219,15 @@ class MediaPipeVisionEngine:
         if source_mirrored:
             key_ids = {
                 "nose": 1,
-                "left_eye": 263,
-                "right_eye": 33,
+                "left_eye": 33,
+                "right_eye": 263,
                 "mouth": 13,
             }
         else:
             key_ids = {
                 "nose": 1,
-                "left_eye": 33,
-                "right_eye": 263,
+                "left_eye": 263,
+                "right_eye": 33,
                 "mouth": 13,
             }
         for name, idx in key_ids.items():
@@ -251,11 +249,23 @@ class MediaPipeVisionEngine:
             float(face_values.get("gaze_y", 0.0)),
             source_mirrored=source_mirrored,
         )
-        return {"face_detected": True, "head_values": head_values, "gaze_label": gaze_label}
+        left_eye_open = float(face_values.get("left_eye_open_pct", 0.0))
+        right_eye_open = float(face_values.get("right_eye_open_pct", 0.0))
+        if source_mirrored:
+            left_eye_open, right_eye_open = right_eye_open, left_eye_open
+        eyes_open_label = f"L:{left_eye_open:.0f}% R:{right_eye_open:.0f}%"
+        return {
+            "face_detected": True,
+            "head_values": head_values,
+            "gaze_label": gaze_label,
+            "eyes_open_label": eyes_open_label,
+        }
 
     @staticmethod
     def _format_gaze_label(gaze_x: float, gaze_y: float, source_mirrored: bool) -> str:
-        gx = -gaze_x if source_mirrored else gaze_x
+        # Gaze is computed on the same frame that is shown to the user.
+        # Do not invert horizontally again for mirrored mode.
+        gx = gaze_x
         gy = gaze_y
         threshold = 0.22
         horizontal = "center"
