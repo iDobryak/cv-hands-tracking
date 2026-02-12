@@ -11,21 +11,21 @@ from src.vision.mediapipe_engine import MediaPipeVisionEngine
 
 
 class VisionRuntime(QThread):
-    frame_ready = Signal(QImage, object, object, object, float)
+    frame_ready = Signal(QImage, object, object, object, object, float)
     error = Signal(str)
 
     def __init__(self, camera_index: int = 0) -> None:
         super().__init__()
         self._running = True
         self._camera_index = camera_index
-        self._source_mirrored = False
+        self._invert_camera = False
 
     def stop(self) -> None:
         self._running = False
         self.wait(1500)
 
-    def set_source_mirrored(self, enabled: bool) -> None:
-        self._source_mirrored = enabled
+    def set_camera_inverted(self, enabled: bool) -> None:
+        self._invert_camera = enabled
 
     def run(self) -> None:
         camera = CameraSource(camera_index=self._camera_index)
@@ -38,7 +38,10 @@ class VisionRuntime(QThread):
                 if frame is None:
                     continue
 
-                processed = engine.process(frame, source_mirrored=self._source_mirrored)
+                if self._invert_camera:
+                    frame = cv2.flip(frame, 1)
+
+                processed = engine.process(frame, source_mirrored=self._invert_camera)
 
                 now = time.perf_counter()
                 frame_times.append(now)
@@ -53,7 +56,14 @@ class VisionRuntime(QThread):
                 rgb = cv2.cvtColor(processed.frame_bgr, cv2.COLOR_BGR2RGB)
                 h, w, ch = rgb.shape
                 qimg = QImage(rgb.data, w, h, ch * w, QImage.Format.Format_RGB888).copy()
-                self.frame_ready.emit(qimg, processed.metrics, processed.head_metrics, processed.diagnostics, fps)
+                self.frame_ready.emit(
+                    qimg,
+                    processed.metrics,
+                    processed.metrics_valid,
+                    processed.head_metrics,
+                    processed.diagnostics,
+                    fps,
+                )
         except Exception as exc:
             self.error.emit(str(exc))
         finally:
